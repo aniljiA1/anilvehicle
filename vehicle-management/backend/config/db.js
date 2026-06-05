@@ -1,51 +1,33 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
-const fs = require('fs');
-require('dotenv').config();
+const { createClient } = require("@libsql/client");
+const path = require("path");
+const fs = require("fs");
+require("dotenv").config();
 
-const dbPath = process.env.DB_PATH || './database/vehicles.db';
-const dbDir = path.dirname(path.resolve(dbPath));
-
+// Ensure database directory exists
+const dbDir = path.resolve("./database");
 if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });
 }
 
-const db = new sqlite3.Database(path.resolve(dbPath), (err) => {
-  if (err) {
-    console.error('❌ Database connection error:', err.message);
-  } else {
-    console.log('✅ SQLite database connected!');
-    console.log(`📁 DB file: ${path.resolve(dbPath)}`);
-  }
+const db = createClient({
+  url: process.env.DB_PATH || "file:./database/vehicles.db",
 });
 
-db.run('PRAGMA journal_mode = WAL');
+console.log("✅ SQLite (libsql) database connected!");
 
-// Helper: run query (INSERT, UPDATE, DELETE)
-const run = (sql, params = []) =>
-  new Promise((resolve, reject) => {
-    db.run(sql, params, function (err) {
-      if (err) reject(err);
-      else resolve({ lastID: this.lastID, changes: this.changes });
-    });
-  });
+const run = async (sql, params = []) => {
+  const result = await db.execute({ sql, args: params });
+  return { lastID: result.lastInsertRowid, changes: result.rowsAffected };
+};
 
-// Helper: get single row
-const get = (sql, params = []) =>
-  new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
-      if (err) reject(err);
-      else resolve(row);
-    });
-  });
+const get = async (sql, params = []) => {
+  const result = await db.execute({ sql, args: params });
+  return result.rows[0] || null;
+};
 
-// Helper: get all rows
-const all = (sql, params = []) =>
-  new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows);
-    });
-  });
+const all = async (sql, params = []) => {
+  const result = await db.execute({ sql, args: params });
+  return result.rows;
+};
 
 module.exports = { run, get, all };
